@@ -17,10 +17,20 @@ langchain==0.1.0
 langchain-openai==0.0.5
 langchain-community==0.0.10
 
-# Data Processing
-pandas==2.1.4
-numpy==1.25.2
-pydantic==2.5.0
+# CrewAI Framework
+crewai==0.22.5
+crewai-tools==0.1.6
+
+# RAG and Graph Processing
+sentence-transformers==2.2.2
+scikit-learn>=1.0.0
+networkx==3.2.1
+pyvis==0.3.2
+neo4j==5.15.0
+
+# Data Processing - Updated for Python 3.12 compatibility
+pandas>=2.1.4
+numpy>=1.26.0
 python-multipart==0.0.6
 
 # Document Processing and LangExtract dependencies
@@ -44,11 +54,10 @@ email-validator==2.1.0
 structlog==23.2.0
 rich==13.7.0
 
-# Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-httpx==0.25.2
+# Dashboard Dependencies
+dash>=2.14.0
+dash-bootstrap-components>=1.5.0
+plotly>=5.17.0
 
 # Development
 black==23.11.0

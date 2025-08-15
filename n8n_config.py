@@ -51,6 +51,14 @@ N8N_CONFIG = {
 
 def get_webhook_url(workflow_type: str) -> str:
     """Get webhook URL for specific workflow type"""
+    # Check if we should use local mock webhook for testing
+    use_mock = os.getenv('USE_MOCK_WEBHOOK', 'false').lower() == 'true'
+
+    if use_mock:
+        mock_base_url = os.getenv('MOCK_WEBHOOK_URL', 'http://localhost:8052')
+        return f"{mock_base_url}/webhook/{workflow_type.replace('_', '-')}"
+
+    # Use configured N8N webhooks
     webhook_config = N8N_WEBHOOKS.get(workflow_type)
     if webhook_config:
         return webhook_config['url']

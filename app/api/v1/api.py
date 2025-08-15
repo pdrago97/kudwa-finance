@@ -3,7 +3,7 @@ API v1 router configuration
 """
 
 from fastapi import APIRouter
-from app.api.v1.endpoints import entities, query, documents, dashboards, webhooks, realtime
+from app.api.v1.endpoints import entities, query, documents, dashboards, webhooks, realtime, crew_chat
 
 api_router = APIRouter()
 
@@ -14,3 +14,4 @@ api_router.include_router(documents.router, prefix="/documents", tags=["document
 api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashboards"])
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
 api_router.include_router(realtime.router, prefix="/realtime", tags=["realtime"])
+api_router.include_router(crew_chat.router, prefix="/crew", tags=["crew-ai"])

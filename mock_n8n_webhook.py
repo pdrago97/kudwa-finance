@@ -31,59 +31,111 @@ async def ontology_extension_webhook(request: Request):
         # Generate realistic response based on input
         if filename:
             response = {
-                "assistant_text": f"🔍 Analyzed document '{filename}' and found several potential ontology extensions. Here are my recommendations:",
-                "proposals": [
+                "response": f"🔍 Analyzed document '{filename}' and found several potential ontology extensions. Here are my recommendations for improving your financial data model:",
+                "response_type": "ontology_proposal",
+                "confidence_score": 0.92,
+                "requires_user_input": True,
+                "ontology_extensions": [
                     {
-                        "id": f"prop-{uuid.uuid4().hex[:8]}",
-                        "type": "Entity",
-                        "name": "PaymentTransaction",
-                        "description": "Financial transaction entity with amount, currency, and parties",
-                        "action": "add",
+                        "id": f"ext-{uuid.uuid4().hex[:8]}",
+                        "entity_type": "PaymentTransaction",
+                        "description": "Financial transaction entity with amount, currency, and parties involved",
+                        "properties": [
+                            {"name": "amount", "type": "decimal", "required": True},
+                            {"name": "currency", "type": "string", "required": True},
+                            {"name": "transaction_date", "type": "datetime", "required": True},
+                            {"name": "reference_number", "type": "string", "required": False}
+                        ],
+                        "relationships": [
+                            {"target_entity": "Account", "relationship_type": "debits_from", "description": "Source account for transaction"},
+                            {"target_entity": "Account", "relationship_type": "credits_to", "description": "Destination account for transaction"}
+                        ],
+                        "justification": "Document contains transaction data that needs structured representation",
                         "confidence": 0.92
                     },
                     {
-                        "id": f"prop-{uuid.uuid4().hex[:8]}",
-                        "type": "Relationship", 
-                        "name": "involves_counterparty",
-                        "description": "Links transactions to counterparty entities",
-                        "action": "add",
+                        "id": f"ext-{uuid.uuid4().hex[:8]}",
+                        "entity_type": "Counterparty",
+                        "description": "External party involved in financial transactions",
+                        "properties": [
+                            {"name": "name", "type": "string", "required": True},
+                            {"name": "identifier", "type": "string", "required": False},
+                            {"name": "type", "type": "string", "required": True}
+                        ],
+                        "relationships": [
+                            {"target_entity": "PaymentTransaction", "relationship_type": "participates_in", "description": "Links counterparty to transactions"}
+                        ],
+                        "justification": "Need to track external parties in transactions",
                         "confidence": 0.87
-                    },
+                    }
+                ],
+                "data_entry_proposals": [
                     {
-                        "id": f"prop-{uuid.uuid4().hex[:8]}",
-                        "type": "Property",
-                        "name": "transaction_date",
-                        "description": "ISO date when transaction occurred",
-                        "action": "add",
+                        "id": f"data-{uuid.uuid4().hex[:8]}",
+                        "entity_type": "PaymentTransaction",
+                        "proposed_data": {
+                            "amount": 1250.00,
+                            "currency": "USD",
+                            "transaction_date": "2024-01-15T10:30:00Z",
+                            "reference_number": "TXN-2024-001"
+                        },
+                        "source_reference": f"Extracted from {filename}",
                         "confidence": 0.95
                     }
                 ],
-                "extracted_entities": [
-                    {"type": "Amount", "value": "$1,250.00", "confidence": 0.98},
-                    {"type": "Date", "value": "2024-01-15", "confidence": 0.94},
-                    {"type": "Company", "value": "Acme Corp", "confidence": 0.89}
+                "suggested_actions": [
+                    {
+                        "id": "action-1",
+                        "label": "Review Ontology Extensions",
+                        "action_type": "review_proposal",
+                        "target": "ontology_extensions",
+                        "style": "primary"
+                    },
+                    {
+                        "id": "action-2",
+                        "label": "Upload More Documents",
+                        "action_type": "upload_document",
+                        "target": "document_processor",
+                        "style": "info"
+                    }
                 ],
-                "meta": {
-                    "processing_time_ms": 1200,
-                    "document_type": "financial_document",
-                    "status": "success",
-                    "timestamp": datetime.now().isoformat()
-                }
+                "context_needed": [],
+                "sources": [
+                    {
+                        "document_id": filename,
+                        "page": 1,
+                        "section": "transaction_data",
+                        "relevance_score": 0.95
+                    }
+                ]
             }
         else:
             # Chat-only response
             response = {
-                "assistant_text": f"💬 I understand you're asking: '{message}'\n\nI can help extend your ontology by analyzing documents and suggesting new entities, relationships, and properties. Upload a document to get started, or ask me specific questions about ontology modeling for financial systems.",
-                "suggestions": [
-                    "Upload a financial document (PDF, CSV, TXT) to extract entities",
-                    "Ask about specific entity types like 'What properties should a Transaction have?'",
-                    "Request relationship modeling: 'How should Customers relate to Accounts?'"
+                "response": f"💬 I understand you're asking: '{message}'\n\nI can help extend your ontology by analyzing documents and suggesting new entities, relationships, and properties. Upload a document to get started, or ask me specific questions about ontology modeling for financial systems.",
+                "response_type": "conversational",
+                "confidence_score": 0.85,
+                "requires_user_input": False,
+                "ontology_extensions": [],
+                "data_entry_proposals": [],
+                "suggested_actions": [
+                    {
+                        "id": "action-upload",
+                        "label": "Upload Financial Document",
+                        "action_type": "upload_document",
+                        "target": "document_processor",
+                        "style": "primary"
+                    },
+                    {
+                        "id": "action-ask",
+                        "label": "Ask Specific Question",
+                        "action_type": "request_clarification",
+                        "target": "chat_input",
+                        "style": "info"
+                    }
                 ],
-                "meta": {
-                    "processing_time_ms": 300,
-                    "status": "success", 
-                    "timestamp": datetime.now().isoformat()
-                }
+                "context_needed": ["Upload a document or ask a specific ontology question"],
+                "sources": []
             }
         
         print(f"📤 Sending response: {json.dumps(response, indent=2)}")
@@ -92,11 +144,15 @@ async def ontology_extension_webhook(request: Request):
     except Exception as e:
         print(f"❌ Error processing webhook: {e}")
         return {
-            "assistant_text": f"⚠️ Error processing your request: {str(e)}",
-            "meta": {
-                "status": "error",
-                "timestamp": datetime.now().isoformat()
-            }
+            "response": f"⚠️ Error processing your request: {str(e)}",
+            "response_type": "conversational",
+            "confidence_score": 0.0,
+            "requires_user_input": False,
+            "ontology_extensions": [],
+            "data_entry_proposals": [],
+            "suggested_actions": [],
+            "context_needed": ["Please try again or contact support"],
+            "sources": []
         }
 
 @app.get("/")
@@ -115,7 +171,7 @@ async def health():
 
 if __name__ == "__main__":
     print("🚀 Starting Mock N8N Webhook Server...")
-    print("📍 Ontology Extension Webhook: http://localhost:8765/webhook/ontology-extension")
-    print("🔍 Health Check: http://localhost:8765/health")
+    print("📍 Ontology Extension Webhook: http://localhost:8052/webhook/ontology-extension")
+    print("🔍 Health Check: http://localhost:8052/health")
     print()
-    uvicorn.run(app, host="0.0.0.0", port=8765, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=8052, log_level="info")

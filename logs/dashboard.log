@@ -1,0 +1,14 @@
+🧠 Kudwa - Isolated Chat Dashboard
+==================================================
+🔍 Checking environment configuration...
+✅ Ontology webhook: https://n8n-moveup-u53084.vm.elestio.app/webhook-test/9ba11544-5c4e-4f91-818a-08a4ecb596c5
+
+🚀 Starting dashboard...
+📍 Dashboard will be available at: http://localhost:8051
+💡 Features:
+   • 🧠 Ontology Extension Chat (Purple)
+   • 🔗 Direct N8N webhook integration
+   • 📁 Optional file upload
+   • 💬 Simple, single chat context
+
+❌ Error starting dashboard: name 'MATCH' is not defined

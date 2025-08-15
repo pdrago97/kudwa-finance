@@ -1,0 +1,21 @@
+# Minimal requirements for Kudwa startup script
+# Core Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+
+# Dashboard
+dash>=2.14.0
+dash-bootstrap-components>=1.5.0
+plotly>=5.17.0
+
+# Database
+supabase>=2.3.0
+
+# HTTP and utilities
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Data processing (Python 3.12 compatible)
+pandas>=2.1.4
+numpy>=1.26.0

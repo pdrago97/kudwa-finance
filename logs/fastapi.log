@@ -1,0 +1,14 @@
+INFO:     Will watch for changes in these directories: ['/home/pedro/projects/Kudwa']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [118516] using WatchFiles
+INFO:     Started server process [118519]
+INFO:     Waiting for application startup.
+{"version": "1.0.0", "event": "Starting Kudwa Financial AI System", "logger": "app.main", "level": "info", "timestamp": "2025-08-15T16:11:44.710490Z"}
+{"event": "Application startup completed successfully", "logger": "app.main", "level": "info", "timestamp": "2025-08-15T16:11:44.710610Z"}
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"event": "Application shutdown completed", "logger": "app.main", "level": "info", "timestamp": "2025-08-15T16:11:49.881435Z"}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [118519]
+INFO:     Stopping reloader process [118516]

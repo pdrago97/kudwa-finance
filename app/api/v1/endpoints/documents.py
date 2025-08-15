@@ -7,13 +7,35 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import json
 import structlog
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from app.services.data_parser import financial_parser
 from app.services.n8n_client import n8n_service
 from app.services.supabase_client import supabase_service
+from agents.crew_base import KudwaCrewManager
+from agents.rag_graph_manager import RAGGraphManager
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
+
+# Initialize CrewAI components lazily
+crew_manager = None
+rag_manager = None
+
+def get_crew_manager():
+    global crew_manager
+    if crew_manager is None:
+        crew_manager = KudwaCrewManager()
+    return crew_manager
+
+def get_rag_manager():
+    global rag_manager
+    if rag_manager is None:
+        rag_manager = RAGGraphManager()
+    return rag_manager
 
 
 class DataIngestionRequest(BaseModel):
@@ -196,6 +218,63 @@ async def upload_financial_document(
         raise HTTPException(
             status_code=500,
             detail=f"Document upload failed: {str(e)}"
+        )
+
+
+@router.post("/upload-crew")
+async def upload_document_with_crew(
+    file: UploadFile = File(...),
+    user_id: str = Form(...)
+):
+    """
+    Upload and process documents using CrewAI agents
+
+    This endpoint uses the new CrewAI-based pipeline for more robust processing
+    """
+    try:
+        logger.info(
+            "Processing document with CrewAI",
+            filename=file.filename,
+            content_type=file.content_type,
+            user_id=user_id
+        )
+
+        # Read file content
+        content = await file.read()
+        content_str = content.decode('utf-8')
+
+        # Get CrewAI managers
+        crew_mgr = get_crew_manager()
+        rag_mgr = get_rag_manager()
+
+        # Create document processing crew
+        crew = crew_mgr.create_document_processing_crew(content_str, file.filename, user_id)
+
+        # Run the crew
+        result = crew.kickoff()
+
+        # Initialize RAG manager and build knowledge graph
+        await rag_mgr.initialize_vector_index()
+        graph_result = await rag_mgr.build_knowledge_graph()
+
+        return {
+            "success": True,
+            "message": "Document processed successfully with CrewAI",
+            "crew_result": str(result),
+            "graph_stats": graph_result.get("stats", {}),
+            "processing_method": "crewai"
+        }
+
+    except Exception as e:
+        logger.error(
+            "CrewAI document processing failed",
+            filename=file.filename,
+            user_id=user_id,
+            error=str(e)
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"CrewAI document processing failed: {str(e)}"
         )
 
 
