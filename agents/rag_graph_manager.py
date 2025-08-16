@@ -32,9 +32,9 @@ class RAGGraphManager:
     async def initialize_vector_index(self):
         """Initialize vector index from Supabase embeddings using sklearn"""
         try:
-            # Fetch all embeddings from Supabase
+            # Fetch all embeddings from Supabase (include metadata for our real vectors)
             embeddings_result = self.supabase.client.table("kudwa_embeddings")\
-                .select("id, content, embedding, source_kind, source_id, ontology_class_id")\
+                .select("id, content, embedding, source_kind, source_id, ontology_class_id, metadata")\
                 .execute()
 
             if not embeddings_result.data:
@@ -45,14 +45,29 @@ class RAGGraphManager:
             self.embeddings_data = []
 
             for item in embeddings_result.data:
-                if item.get("embedding"):
+                # Try to get embedding from metadata (our real 384-dim vectors)
+                embedding_vector = None
+                if item.get("metadata") and item["metadata"].get("embedding_vector"):
+                    embedding_vector = item["metadata"]["embedding_vector"]
+                    # Ensure it's a list, not a string
+                    if isinstance(embedding_vector, str):
+                        try:
+                            import json
+                            embedding_vector = json.loads(embedding_vector)
+                        except:
+                            continue  # Skip if can't parse
+                elif item.get("embedding") and not isinstance(item["embedding"], str):
+                    # Fallback to the vector column if it's not a string representation
+                    embedding_vector = item["embedding"]
+
+                if embedding_vector and isinstance(embedding_vector, list):
                     self.embeddings_data.append({
                         "id": item["id"],
                         "content": item["content"],
                         "source_kind": item["source_kind"],
                         "source_id": item["source_id"],
                         "ontology_class_id": item.get("ontology_class_id"),
-                        "embedding": np.array(item["embedding"], dtype=np.float32)
+                        "embedding": np.array(embedding_vector, dtype=np.float32)
                     })
 
             if self.embeddings_data:

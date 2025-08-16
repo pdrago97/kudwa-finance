@@ -43,8 +43,8 @@ FASTAPI_PID=$!
 echo "⏳ Waiting for FastAPI server to start..."
 sleep 5
 
-# Check if FastAPI is running
-if curl -s http://localhost:8000/api/v1/crew/health > /dev/null; then
+# Check if FastAPI is running (lightweight)
+if curl -s http://localhost:8000/health > /dev/null; then
     echo "✅ FastAPI server started successfully"
 else
     echo "❌ FastAPI server failed to start. Check logs/fastapi.log"

@@ -20,6 +20,105 @@ class FinancialDataParser:
     
     def __init__(self):
         self.supported_formats = ["quickbooks_pl", "rootfi_api", "generic_json"]
+
+    async def _create_kudwa_entity(
+        self,
+        entity_type: str,
+        name: str,
+        properties: Dict[str, Any],
+        document_id: Optional[str] = None,
+        confidence_score: float = 0.9
+    ) -> Dict[str, Any]:
+        """Create entity using Kudwa ontology system"""
+        import uuid
+
+        # First, ensure the ontology class exists
+        class_result = supabase_service.client.table("kudwa_ontology_classes").select("*").eq("class_id", entity_type).execute()
+
+        if not class_result.data:
+            # Create the ontology class
+            supabase_service.client.table("kudwa_ontology_classes").insert({
+                "id": str(uuid.uuid4()),
+                "domain": "financial",
+                "class_id": entity_type,
+                "label": entity_type.replace("_", " ").title(),
+                "class_type": "entity",
+                "properties": {
+                    "auto_generated": True,
+                    "source": "rootfi_parser",
+                    "description": f"Auto-generated class for {entity_type}"
+                },
+                "confidence_score": 0.9,
+                "status": "pending_review"
+            }).execute()
+
+        # Get or create dataset for this document
+        dataset_id = await self._get_or_create_dataset(document_id, properties)
+
+        # Create financial observation
+        observation_id = str(uuid.uuid4())
+        observation_data = {
+            "id": observation_id,
+            "dataset_id": dataset_id,
+            "source_document_id": document_id,
+            "observation_type": entity_type,
+            "account_name": name,
+            "amount": properties.get("amount", 0),
+            "currency": properties.get("currency", "USD"),
+            "metadata": {
+                "properties": properties,
+                "confidence_score": confidence_score,
+                "created_by": "rootfi_parser"
+            }
+        }
+
+        # Add period information if available
+        if "period_start" in properties:
+            observation_data["period_start"] = properties["period_start"]
+        if "period_end" in properties:
+            observation_data["period_end"] = properties["period_end"]
+
+        # Add account_id (required field)
+        observation_data["account_id"] = properties.get("account_id", f"auto_{entity_type}_{observation_id[:8]}")
+
+        result = supabase_service.client.table("kudwa_financial_observations").insert(observation_data).execute()
+
+        return {
+            "id": observation_id,
+            "entity_type": entity_type,
+            "name": name,
+            "properties": properties
+        }
+
+    async def _get_or_create_dataset(
+        self,
+        document_id: Optional[str],
+        properties: Dict[str, Any]
+    ) -> str:
+        """Get or create a dataset for the document"""
+        import uuid
+
+        # Check if dataset already exists for this document
+        if document_id:
+            existing_dataset = supabase_service.client.table("kudwa_financial_datasets").select("id").eq("source_document_id", document_id).execute()
+            if existing_dataset.data:
+                return existing_dataset.data[0]["id"]
+
+        # Create new dataset
+        dataset_id = str(uuid.uuid4())
+        dataset_data = {
+            "id": dataset_id,
+            "name": f"RootFi Financial Data - {properties.get('period_start', 'Unknown')}",
+            "description": f"Financial data imported from RootFi API for period {properties.get('period_start')} to {properties.get('period_end')}",
+            "source_document_id": document_id,
+            "period_start": properties.get("period_start"),
+            "period_end": properties.get("period_end"),
+            "currency": properties.get("currency", "USD"),
+            "created_by": "rootfi_parser"
+        }
+
+        supabase_service.client.table("kudwa_financial_datasets").insert(dataset_data).execute()
+        return dataset_id
         
     async def parse_financial_data(
         self,
@@ -98,36 +197,49 @@ class FinancialDataParser:
         data: Dict[str, Any],
         document_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Parse Rootfi API financial data format"""
-        
+        """Parse Rootfi API financial data format with comprehensive entity extraction"""
+
         financial_entities = []
-        
+
         # Process each data record
         for record in data.get("data", []):
             # Extract company information
             company_entity = await self._create_rootfi_company_entity(record, document_id)
             financial_entities.append(company_entity)
-            
-            # Extract revenue entities
+
+            # Extract revenue entities with detailed line items
             revenue_entities = await self._parse_rootfi_revenue(record, document_id)
             financial_entities.extend(revenue_entities)
-            
-            # Extract expense entities
+
+            # Extract expense entities with detailed line items
             expense_entities = await self._parse_rootfi_expenses(record, document_id)
             financial_entities.extend(expense_entities)
-            
+
+            # Extract cost of goods sold entities
+            cogs_entities = await self._parse_rootfi_cogs(record, document_id)
+            financial_entities.extend(cogs_entities)
+
+            # Extract non-operating revenue and expenses
+            non_op_entities = await self._parse_rootfi_non_operating(record, document_id)
+            financial_entities.extend(non_op_entities)
+
             # Create financial summary entity
             summary_entity = await self._create_financial_summary_entity(record, document_id)
             financial_entities.append(summary_entity)
-        
+
+            # Create period entity for time-based analysis
+            period_entity = await self._create_period_entity(record, document_id)
+            financial_entities.append(period_entity)
+
         return {
             "source_format": "rootfi_api",
             "financial_entities": financial_entities,
             "total_entities_extracted": len(financial_entities),
             "parsing_metadata": {
-                "parser_version": "1.0",
+                "parser_version": "2.0",
                 "parsing_timestamp": datetime.now().isoformat(),
                 "records_processed": len(data.get("data", [])),
+                "entity_types_extracted": ["company", "revenue", "expense", "cogs", "non_operating", "summary", "period"],
                 "data_quality_score": self._calculate_data_quality(financial_entities)
             }
         }
@@ -222,26 +334,22 @@ class FinancialDataParser:
         entities = []
         
         for revenue_item in record.get("revenue", []):
-            entity = await supabase_service.create_entity(
+            entity = await self._create_kudwa_entity(
                 entity_type="revenue_stream",
                 name=revenue_item.get("name", "Unknown Revenue"),
                 properties={
                     "revenue_type": "business_revenue",
                     "amount": float(revenue_item.get("value", 0)),
-                    "currency": "USD",  # Default, could be extracted from record
+                    "currency": "USD",
                     "period_start": record.get("period_start"),
                     "period_end": record.get("period_end"),
                     "platform_id": record.get("platform_id"),
                     "rootfi_company_id": record.get("rootfi_company_id"),
-                    "line_items": revenue_item.get("line_items", [])
+                    "line_items": revenue_item.get("line_items", []),
+                    "rootfi_id": record.get("rootfi_id")
                 },
-                metadata={
-                    "source": "rootfi_api",
-                    "rootfi_id": record.get("rootfi_id"),
-                    "extraction_confidence": 0.95
-                },
-                source_document_id=document_id,
-                created_by="rootfi_parser"
+                document_id=document_id,
+                confidence_score=0.95
             )
             entities.append(entity)
         
@@ -257,7 +365,7 @@ class FinancialDataParser:
         entities = []
         
         for expense_item in record.get("operating_expenses", []):
-            entity = await supabase_service.create_entity(
+            entity = await self._create_kudwa_entity(
                 entity_type="expense_category",
                 name=expense_item.get("name", "Unknown Expense"),
                 properties={
@@ -268,15 +376,11 @@ class FinancialDataParser:
                     "period_end": record.get("period_end"),
                     "platform_id": record.get("platform_id"),
                     "rootfi_company_id": record.get("rootfi_company_id"),
-                    "line_items": expense_item.get("line_items", [])
+                    "line_items": expense_item.get("line_items", []),
+                    "rootfi_id": record.get("rootfi_id")
                 },
-                metadata={
-                    "source": "rootfi_api",
-                    "rootfi_id": record.get("rootfi_id"),
-                    "extraction_confidence": 0.95
-                },
-                source_document_id=document_id,
-                created_by="rootfi_parser"
+                document_id=document_id,
+                confidence_score=0.95
             )
             entities.append(entity)
         
@@ -341,11 +445,11 @@ class FinancialDataParser:
         report_info: Dict[str, Any],
         document_id: Optional[str]
     ) -> Dict[str, Any]:
-        """Create company entity from QuickBooks report info"""
+        """Create company entity from QuickBooks report info using Kudwa tables"""
 
-        return await supabase_service.create_entity(
+        return await self._create_kudwa_entity(
             entity_type="company",
-            name="QuickBooks Company",  # Could be extracted from report if available
+            name=report_info.get("company_name", "QuickBooks Company"),
             properties={
                 "company_type": "reporting_entity",
                 "accounting_standard": report_info.get("accounting_standard", "GAAP"),
@@ -357,12 +461,8 @@ class FinancialDataParser:
                 },
                 "financial_system": "QuickBooks"
             },
-            metadata={
-                "source": "quickbooks_pl",
-                "extraction_confidence": 0.9
-            },
-            source_document_id=document_id,
-            created_by="quickbooks_parser"
+            document_id=document_id,
+            confidence_score=0.9
         )
 
     async def _create_rootfi_company_entity(
@@ -372,27 +472,21 @@ class FinancialDataParser:
     ) -> Dict[str, Any]:
         """Create company entity from Rootfi data"""
 
-        return await supabase_service.create_entity(
+        return await self._create_kudwa_entity(
             entity_type="company",
             name=f"Rootfi Company {record.get('rootfi_company_id')}",
             properties={
                 "company_type": "api_integrated",
                 "rootfi_company_id": record.get("rootfi_company_id"),
                 "platform_id": record.get("platform_id"),
-                "reporting_period": {
-                    "start": record.get("period_start"),
-                    "end": record.get("period_end")
-                },
+                "period_start": record.get("period_start"),
+                "period_end": record.get("period_end"),
                 "gross_profit": float(record.get("gross_profit", 0)),
-                "financial_system": "Rootfi API"
+                "financial_system": "Rootfi API",
+                "rootfi_id": record.get("rootfi_id")
             },
-            metadata={
-                "source": "rootfi_api",
-                "rootfi_id": record.get("rootfi_id"),
-                "extraction_confidence": 0.95
-            },
-            source_document_id=document_id,
-            created_by="rootfi_parser"
+            document_id=document_id,
+            confidence_score=0.95
         )
 
     async def _create_account_entity(
@@ -426,7 +520,7 @@ class FinancialDataParser:
         elif category and any(term in category.lower() for term in ["expense", "cost"]):
             entity_type = "expense_account"
 
-        return await supabase_service.create_entity(
+        return await self._create_kudwa_entity(
             entity_type=entity_type,
             name=account_name,
             properties={
@@ -437,13 +531,8 @@ class FinancialDataParser:
                 "currency": "USD",
                 "data_points": len([v for v in time_series_data.values() if v != 0])
             },
-            metadata={
-                "source": "quickbooks_pl",
-                "extraction_confidence": 0.9,
-                "has_time_series": True
-            },
-            source_document_id=document_id,
-            created_by="quickbooks_parser"
+            document_id=document_id,
+            confidence_score=0.9
         )
 
     async def _create_financial_summary_entity(
@@ -453,7 +542,7 @@ class FinancialDataParser:
     ) -> Dict[str, Any]:
         """Create financial summary entity from Rootfi record"""
 
-        return await supabase_service.create_entity(
+        return await self._create_kudwa_entity(
             entity_type="financial_summary",
             name=f"Financial Summary {record.get('period_start')} to {record.get('period_end')}",
             properties={
@@ -461,19 +550,151 @@ class FinancialDataParser:
                 "period_start": record.get("period_start"),
                 "period_end": record.get("period_end"),
                 "gross_profit": float(record.get("gross_profit", 0)),
+                "operating_profit": float(record.get("operating_profit", 0)),
+                "net_profit": float(record.get("net_profit", 0)),
                 "total_revenue": sum([item.get("value", 0) for item in record.get("revenue", [])]),
                 "total_operating_expenses": sum([item.get("value", 0) for item in record.get("operating_expenses", [])]),
                 "cost_of_goods_sold": sum([item.get("value", 0) for item in record.get("cost_of_goods_sold", [])]),
                 "currency": "USD",
-                "platform_id": record.get("platform_id")
+                "platform_id": record.get("platform_id"),
+                "rootfi_id": record.get("rootfi_id")
             },
-            metadata={
-                "source": "rootfi_api",
-                "rootfi_id": record.get("rootfi_id"),
-                "extraction_confidence": 0.95
+            document_id=document_id,
+            confidence_score=0.95
+        )
+
+    async def _parse_rootfi_cogs(
+        self,
+        record: Dict[str, Any],
+        document_id: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Parse cost of goods sold from Rootfi record"""
+        entities = []
+
+        for cogs_item in record.get("cost_of_goods_sold", []):
+            entity = await self._create_kudwa_entity(
+                entity_type="cost_of_goods_sold",
+                name=cogs_item.get("name", "Unknown COGS"),
+                properties={
+                    "amount": float(cogs_item.get("value", 0)),
+                    "period_start": record.get("period_start"),
+                    "period_end": record.get("period_end"),
+                    "currency": "USD",
+                    "line_items_count": len(cogs_item.get("line_items", [])),
+                    "rootfi_id": record.get("rootfi_id")
+                },
+                document_id=document_id,
+                confidence_score=0.9
+            )
+            entities.append(entity)
+
+            # Parse line items if present
+            for line_item in cogs_item.get("line_items", []):
+                line_entity = await self._create_kudwa_entity(
+                    entity_type="cogs_line_item",
+                    name=line_item.get("name", "Unknown Line Item"),
+                    properties={
+                        "amount": float(line_item.get("value", 0)),
+                        "account_id": line_item.get("account_id"),
+                        "parent_category": cogs_item.get("name"),
+                        "parent_entity": entity["id"],
+                        "period_start": record.get("period_start"),
+                        "period_end": record.get("period_end"),
+                        "currency": "USD"
+                    },
+                    document_id=document_id,
+                    confidence_score=0.85
+                )
+                entities.append(line_entity)
+
+        return entities
+
+    async def _parse_rootfi_non_operating(
+        self,
+        record: Dict[str, Any],
+        document_id: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Parse non-operating revenue and expenses from Rootfi record"""
+        entities = []
+
+        # Parse non-operating revenue
+        for revenue_item in record.get("non_operating_revenue", []):
+            entity = await self._create_kudwa_entity(
+                entity_type="non_operating_revenue",
+                name=revenue_item.get("name", "Unknown Non-Op Revenue"),
+                properties={
+                    "amount": float(revenue_item.get("value", 0)),
+                    "period_start": record.get("period_start"),
+                    "period_end": record.get("period_end"),
+                    "currency": "USD",
+                    "line_items_count": len(revenue_item.get("line_items", [])),
+                    "rootfi_id": record.get("rootfi_id")
+                },
+                document_id=document_id,
+                confidence_score=0.9
+            )
+            entities.append(entity)
+
+        # Parse non-operating expenses
+        for expense_item in record.get("non_operating_expenses", []):
+            entity = await self._create_kudwa_entity(
+                entity_type="non_operating_expense",
+                name=expense_item.get("name", "Unknown Non-Op Expense"),
+                properties={
+                    "amount": float(expense_item.get("value", 0)),
+                    "period_start": record.get("period_start"),
+                    "period_end": record.get("period_end"),
+                    "currency": "USD",
+                    "line_items_count": len(expense_item.get("line_items", [])),
+                    "rootfi_id": record.get("rootfi_id")
+                },
+                document_id=document_id,
+                confidence_score=0.9
+            )
+            entities.append(entity)
+
+            # Parse detailed line items for non-operating expenses
+            for line_item in expense_item.get("line_items", []):
+                line_entity = await self._create_kudwa_entity(
+                    entity_type="non_operating_expense_line_item",
+                    name=line_item.get("name", "Unknown Line Item"),
+                    properties={
+                        "amount": float(line_item.get("value", 0)),
+                        "account_id": line_item.get("account_id"),
+                        "parent_category": expense_item.get("name"),
+                        "parent_entity": entity["id"],
+                        "period_start": record.get("period_start"),
+                        "period_end": record.get("period_end"),
+                        "currency": "USD"
+                    },
+                    document_id=document_id,
+                    confidence_score=0.85
+                )
+                entities.append(line_entity)
+
+        return entities
+
+    async def _create_period_entity(
+        self,
+        record: Dict[str, Any],
+        document_id: Optional[str]
+    ) -> Dict[str, Any]:
+        """Create period entity for time-based analysis"""
+
+        return await self._create_kudwa_entity(
+            entity_type="financial_period",
+            name=f"Period {record.get('period_start')} to {record.get('period_end')}",
+            properties={
+                "period_start": record.get("period_start"),
+                "period_end": record.get("period_end"),
+                "platform_id": record.get("platform_id"),
+                "company_id": record.get("rootfi_company_id"),
+                "period_type": "monthly",
+                "currency": "USD",
+                "rootfi_id": record.get("rootfi_id")
             },
-            source_document_id=document_id,
-            created_by="rootfi_parser"
+            document_id=document_id,
+            confidence_score=1.0
         )
 
     async def _parse_generic_financial(

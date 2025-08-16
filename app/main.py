@@ -3,9 +3,12 @@ Kudwa AI-Powered Financial Data Processing System
 Main FastAPI application entry point
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import structlog
 
@@ -64,13 +67,29 @@ app.add_middleware(
     allowed_hosts=["*"] if settings.DEBUG else ["localhost", "127.0.0.1"]
 )
 
+# Setup templates and static files
+templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 # Include API routes
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")
 async def root():
-    """Root endpoint with system information"""
+    """Root endpoint - redirect to modern dashboard"""
+    return RedirectResponse(url="/dashboard")
+
+@app.get("/dashboard")
+async def dashboard(request: Request):
+    """Serve the modern dashboard"""
+    return templates.TemplateResponse("modern_dashboard.html", {"request": request})
+
+
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint"""
     return {
         "message": "Kudwa AI-Powered Financial Data Processing System",
         "version": settings.APP_VERSION,

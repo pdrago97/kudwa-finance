@@ -69,29 +69,52 @@ class GraphAnalysisRequest(BaseModel):
 async def chat_with_crew_agent(message: ChatMessage):
     """
     Chat with CrewAI-based financial data agent
-    
+
     This endpoint provides intelligent responses using multiple specialized agents
     """
     try:
         import time
+        import uuid
+
         start_time = time.time()
-        
+        request_id = str(uuid.uuid4())
+
         logger.info(
             "Processing chat message with CrewAI",
             message=message.message[:100] + "..." if len(message.message) > 100 else message.message,
-            user_id=message.user_id
+            user_id=message.user_id,
+            request_id=request_id
         )
-        
+
         # Get chat agent and process message
         agent = get_chat_agent()
+        context = {**(message.context or {}), "request_id": request_id}
         result = await agent.process_chat_message(
             message.message,
-            message.context or {}
+            context
         )
         
         processing_time = int((time.time() - start_time) * 1000)
-        
+
+        logger.info(
+            "Chat processing completed",
+            request_id=request_id,
+            processing_time_ms=processing_time,
+            success=result.get("success", False),
+            agent_type=result.get("agent_type", "unknown")
+        )
+
         if result.get("success"):
+            # Check if response contains visualization spec
+            if "gadget_spec" in result:
+                return ChatResponse(
+                    success=True,
+                    response=result["response"],
+                    agent_type=result.get("agent_type", "unknown"),
+                    query_type=result.get("query_type", "general"),
+                    processing_time_ms=processing_time,
+                    graph_data=result["gadget_spec"]
+                )
             return ChatResponse(
                 success=True,
                 response=result["response"],
@@ -110,6 +133,7 @@ async def chat_with_crew_agent(message: ChatMessage):
             "Chat processing failed",
             message=message.message,
             user_id=message.user_id,
+            request_id=request_id,
             error=str(e)
         )
         raise HTTPException(

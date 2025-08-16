@@ -17,6 +17,7 @@ from app.services.n8n_client import n8n_service
 from app.services.supabase_client import supabase_service
 from agents.crew_base import KudwaCrewManager
 from agents.rag_graph_manager import RAGGraphManager
+from app.services.embedding_service import embedding_service
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -264,6 +265,156 @@ async def upload_document_with_crew(
             "graph_stats": graph_result.get("stats", {}),
             "processing_method": "crewai"
         }
+
+    except Exception as e:
+        logger.error(
+            "CrewAI document processing failed",
+            filename=file.filename,
+            user_id=user_id,
+            error=str(e)
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"CrewAI document processing failed: {str(e)}"
+        )
+
+
+@router.post("/ingest-rootfi")
+async def ingest_rootfi_financial_data(
+    file: UploadFile = File(...),
+    user_id: str = Form(...)
+):
+    """
+    Specialized endpoint for ingesting RootFi financial data files
+
+    This endpoint is optimized for processing RootFi API format JSON files
+    and automatically extracts comprehensive financial entities including:
+    - Company information
+    - Revenue streams with line items
+    - Operating expenses with detailed breakdowns
+    - Cost of goods sold
+    - Non-operating revenue and expenses
+    - Financial summaries and periods
+    """
+    import time
+    start_time = time.time()
+
+    try:
+        logger.info(
+            "Processing RootFi financial data file",
+            filename=file.filename,
+            content_type=file.content_type,
+            user_id=user_id
+        )
+
+        # Read and parse file content
+        content = await file.read()
+        try:
+            data = json.loads(content.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid JSON format: {str(e)}"
+            )
+
+        # Validate JSON format - be more flexible
+        if not isinstance(data, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid format: expected JSON object"
+            )
+
+        # Check for common financial data structures
+        has_financial_data = (
+            "data" in data or
+            "financial_data" in data or
+            "transactions" in data or
+            "accounts" in data or
+            "revenue" in data or
+            "expenses" in data or
+            len(data) > 0  # Any non-empty object
+        )
+
+        if not has_financial_data:
+            raise HTTPException(
+                status_code=400,
+                detail="No recognizable financial data structure found"
+            )
+
+        # Generate document ID
+        import uuid
+        document_id = str(uuid.uuid4())
+
+        # Store document metadata first (required for foreign key constraints)
+        supabase_service.client.table("kudwa_documents").insert({
+            "id": document_id,
+            "filename": file.filename,
+            "content_type": file.content_type or "application/json",
+            "file_size": len(content),
+            "content": json.dumps(data),
+            "processing_status": "processing",
+            "uploaded_by": user_id
+        }).execute()
+
+        # Auto-detect source format (RootFi list vs QuickBooks object)
+        detected_format = "rootfi_api"
+        if isinstance(data.get("data"), dict):
+            inner = data.get("data", {})
+            if isinstance(inner, dict) and ("Header" in inner or "Rows" in inner or "Columns" in inner):
+                detected_format = "quickbooks_pl"
+        elif not isinstance(data.get("data"), list):
+            detected_format = "generic_json"
+
+        # Parse the financial data using the detected parser
+        parsing_result = await financial_parser.parse_financial_data(
+            data=data,
+            source_format=detected_format,
+            document_id=document_id
+        )
+
+        # Update document with processing results
+        supabase_service.client.table("kudwa_documents").update({
+            "processing_status": "completed",
+            "extracted_entities": parsing_result.get("financial_entities", []),
+            "processed_at": parsing_result["parsing_metadata"]["parsing_timestamp"]
+        }).eq("id", document_id).execute()
+
+        # Index document and extracted entities into RAG embeddings
+        index_stats = embedding_service.index_document_and_entities(
+            document_id=document_id,
+            filename=file.filename,
+            data=data,
+            entities=parsing_result.get("financial_entities", [])
+        )
+
+        processing_time = int((time.time() - start_time) * 1000)
+
+        return {
+            "success": True,
+            "document_id": document_id,
+            "detected_format": detected_format,
+            "entities_extracted": parsing_result.get("total_entities_extracted", 0),
+            "records_processed": parsing_result.get("parsing_metadata", {}).get("records_processed", 0),
+            "entity_types": parsing_result.get("parsing_metadata", {}).get("entity_types_extracted", []),
+            "data_quality_score": parsing_result.get("parsing_metadata", {}).get("data_quality_score", 0.0),
+            "embedding_index": index_stats,
+            "processing_time_ms": processing_time,
+            "message": "Successfully processed and indexed document"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "RootFi data ingestion failed",
+            filename=file.filename,
+            user_id=user_id,
+            error=str(e)
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"RootFi data ingestion failed: {str(e)}"
+        )
 
     except Exception as e:
         logger.error(

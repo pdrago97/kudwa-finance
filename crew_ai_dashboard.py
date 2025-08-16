@@ -255,6 +255,12 @@ app.layout = dbc.Container([
                         className="me-2"
                     ),
                     dbc.Button(
+                        "Ingest RootFi Data",
+                        id="rootfi-btn",
+                        color="warning",
+                        className="me-2"
+                    ),
+                    dbc.Button(
                         "Build Knowledge Graph",
                         id="graph-btn",
                         color="success"
@@ -373,39 +379,67 @@ app.layout = dbc.Container([
 # Callback for file upload and processing
 @app.callback(
     Output('upload-status', 'children'),
-    Input('process-btn', 'n_clicks'),
+    [Input('process-btn', 'n_clicks'),
+     Input('rootfi-btn', 'n_clicks')],
     State('upload-data', 'contents'),
     State('upload-data', 'filename'),
     State('user-id-input', 'value')
 )
-def process_uploaded_file(n_clicks, contents, filename, user_id):
-    if n_clicks is None or contents is None:
+def process_uploaded_file(crew_clicks, rootfi_clicks, contents, filename, user_id):
+    if contents is None:
         return ""
-    
+
+    # Determine which button was clicked
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return ""
+
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
     try:
         # Decode file content
         content_type, content_string = contents.split(',')
         import base64
         decoded = base64.b64decode(content_string)
-        
-        # Send to CrewAI endpoint
+
         files = {'file': (filename, decoded, 'application/json')}
         data = {'user_id': user_id}
-        
-        response = requests.post(f"{API_BASE}/documents/upload-crew", files=files, data=data)
-        
-        if response.status_code == 200:
-            result = response.json()
-            return dbc.Alert([
-                html.H5("✅ Processing Successful!"),
-                html.P(f"File: {filename}"),
-                html.P(f"Method: {result.get('processing_method', 'unknown')}"),
-                html.P(f"Graph nodes: {result.get('graph_stats', {}).get('total_nodes', 0)}"),
-                html.P(f"Graph edges: {result.get('graph_stats', {}).get('total_edges', 0)}")
-            ], color="success")
-        else:
-            return dbc.Alert(f"❌ Processing failed: {response.text}", color="danger")
-            
+
+        if button_id == 'rootfi-btn':
+            # Send to RootFi ingestion endpoint
+            response = requests.post(f"{API_BASE}/documents/ingest-rootfi", files=files, data=data)
+
+            if response.status_code == 200:
+                result = response.json()
+                return dbc.Alert([
+                    html.H5("✅ RootFi Data Ingestion Successful!"),
+                    html.P(f"File: {filename}"),
+                    html.P(f"Document ID: {result.get('document_id', 'N/A')[:8]}..."),
+                    html.P(f"Entities extracted: {result.get('entities_extracted', 0)}"),
+                    html.P(f"Records processed: {result.get('records_processed', 0)}"),
+                    html.P(f"Entity types: {', '.join(result.get('entity_types', []))}"),
+                    html.P(f"Data quality: {result.get('data_quality_score', 0):.2f}"),
+                    html.P(f"Processing time: {result.get('processing_time_ms', 0)}ms")
+                ], color="success")
+            else:
+                return dbc.Alert(f"❌ RootFi ingestion failed: {response.text}", color="danger")
+
+        elif button_id == 'process-btn':
+            # Send to CrewAI endpoint
+            response = requests.post(f"{API_BASE}/documents/upload-crew", files=files, data=data)
+
+            if response.status_code == 200:
+                result = response.json()
+                return dbc.Alert([
+                    html.H5("✅ CrewAI Processing Successful!"),
+                    html.P(f"File: {filename}"),
+                    html.P(f"Method: {result.get('processing_method', 'unknown')}"),
+                    html.P(f"Graph nodes: {result.get('graph_stats', {}).get('total_nodes', 0)}"),
+                    html.P(f"Graph edges: {result.get('graph_stats', {}).get('total_edges', 0)}")
+                ], color="success")
+            else:
+                return dbc.Alert(f"❌ CrewAI processing failed: {response.text}", color="danger")
+
     except Exception as e:
         logger.error("File processing failed", error=str(e))
         return dbc.Alert(f"❌ Error: {str(e)}", color="danger")
