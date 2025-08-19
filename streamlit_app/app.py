@@ -5,6 +5,9 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 import time
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'components'))
+from component_library import ComponentLibrary
 
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
 
@@ -195,6 +198,137 @@ def create_network_graph(ontology_data):
 
     return fig
 
+def render_canvas_component(component, index):
+    """Render a canvas component based on its type and configuration"""
+    try:
+        component_type = component.get("type", "unknown")
+        title = component.get("title", f"Component {index + 1}")
+
+        # Create a container for the component with controls
+        with st.container():
+            col1, col2, col3 = st.columns([3, 1, 1])
+
+            with col1:
+                st.subheader(title)
+
+            with col2:
+                if st.button("🔄", key=f"refresh_{index}", help="Refresh component"):
+                    with st.spinner("Refreshing component..."):
+                        try:
+                            response = requests.post(
+                                f"{BACKEND_BASE_URL}/api/refresh-component-data",
+                                json=component,
+                                timeout=30
+                            )
+                            if response.ok:
+                                refreshed_component = response.json()
+                                st.session_state.canvas_components[index] = refreshed_component
+                                st.success("✅ Component refreshed!")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Failed to refresh: {response.text}")
+                        except Exception as e:
+                            st.error(f"❌ Refresh error: {str(e)}")
+
+            with col3:
+                if st.button("❌", key=f"delete_{index}", help="Delete component"):
+                    st.session_state.canvas_components.pop(index)
+                    st.rerun()
+
+            # Render based on component type using component library
+            templates = ComponentLibrary.get_component_templates()
+            if component_type in templates:
+                renderer = templates[component_type]["renderer"]
+                renderer(component, index)
+            else:
+                # Fallback to basic rendering
+                if component_type == "metric_card":
+                    render_metric_card(component)
+                elif component_type == "chart":
+                    render_chart_component(component)
+                elif component_type == "table":
+                    render_table_component(component)
+                elif component_type == "kpi_dashboard":
+                    render_kpi_dashboard(component)
+                else:
+                    st.warning(f"Unknown component type: {component_type}")
+                    st.json(component)
+
+            st.markdown("---")
+
+    except Exception as e:
+        st.error(f"Error rendering component {index}: {str(e)}")
+        with st.expander("Component Debug Info"):
+            st.json(component)
+
+def render_metric_card(component):
+    """Render a metric card component"""
+    data = component.get("data", {})
+    metric_value = data.get("value", "N/A")
+    metric_label = data.get("label", "Metric")
+    delta = data.get("delta", None)
+
+    col1, col2, col3 = st.columns(3)
+    with col2:
+        st.metric(
+            label=metric_label,
+            value=metric_value,
+            delta=delta
+        )
+
+def render_chart_component(component):
+    """Render a chart component"""
+    chart_data = component.get("data", {})
+    chart_type = component.get("chart_type", "bar")
+
+    if not chart_data:
+        st.warning("No data available for chart")
+        return
+
+    # Convert data to DataFrame if needed
+    if isinstance(chart_data, dict):
+        df = pd.DataFrame(chart_data)
+    else:
+        df = pd.DataFrame(chart_data)
+
+    if chart_type == "bar":
+        st.bar_chart(df)
+    elif chart_type == "line":
+        st.line_chart(df)
+    elif chart_type == "area":
+        st.area_chart(df)
+    else:
+        st.dataframe(df)
+
+def render_table_component(component):
+    """Render a table component"""
+    table_data = component.get("data", [])
+
+    if not table_data:
+        st.warning("No data available for table")
+        return
+
+    df = pd.DataFrame(table_data)
+    st.dataframe(df, use_container_width=True)
+
+def render_kpi_dashboard(component):
+    """Render a KPI dashboard component"""
+    kpis = component.get("data", {}).get("kpis", [])
+
+    if not kpis:
+        st.warning("No KPIs available")
+        return
+
+    # Display KPIs in columns
+    cols = st.columns(len(kpis))
+    for i, kpi in enumerate(kpis):
+        with cols[i]:
+            st.metric(
+                label=kpi.get("label", f"KPI {i+1}"),
+                value=kpi.get("value", "N/A"),
+                delta=kpi.get("delta", None)
+            )
+
 def main():
     # Simple title
     st.title("🏦 Kudwa Financial Platform")
@@ -229,7 +363,7 @@ def main():
     st.markdown("---")
     
     # Simple tabs
-    tab1, tab2, tab3 = st.tabs(["Chat", "Graph", "Upload"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Chat", "Graph", "Upload", "Canvas"])
     
     with tab1:
         st.header("Chat")
@@ -445,7 +579,136 @@ def main():
                             st.error("Failed")
         else:
             st.success("No pending approvals!")
-    
+
+    with tab4:
+        st.header("Component Canvas")
+        st.write("Create dynamic interface components with AI prompts")
+
+        # Initialize session state for components
+        if "canvas_components" not in st.session_state:
+            st.session_state.canvas_components = []
+
+        # Component creation interface
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            component_prompt = st.text_area(
+                "Describe the component you want to create:",
+                placeholder="e.g., 'Show me a bar chart of total amounts by account type' or 'Create a metric card showing the number of entities'",
+                height=100
+            )
+
+        with col2:
+            st.write("**Available Templates:**")
+            templates = ComponentLibrary.get_component_templates()
+            for template_id, template_info in templates.items():
+                st.write(f"{template_info['icon']} {template_info['name']}")
+                st.caption(template_info['description'])
+
+            if st.button("🪄 Generate Component", type="primary"):
+                if component_prompt:
+                    with st.spinner("Generating component..."):
+                        # Call the component generation API
+                        try:
+                            response = requests.post(
+                                f"{BACKEND_BASE_URL}/api/generate-component",
+                                json={"prompt": component_prompt},
+                                timeout=30
+                            )
+                            if response.ok:
+                                component_data = response.json()
+                                st.session_state.canvas_components.append(component_data)
+                                st.success("✅ Component generated!")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Failed to generate component: {response.text}")
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+                else:
+                    st.warning("Please enter a component description")
+
+        st.markdown("---")
+
+        # Display components in a grid layout
+        if st.session_state.canvas_components:
+            st.subheader("Your Components")
+
+            # Component management controls
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                if st.button("🔄 Refresh All Components"):
+                    st.rerun()
+            with col2:
+                layout_mode = st.selectbox(
+                    "Layout",
+                    ["Single Column", "Two Columns", "Grid"],
+                    key="layout_mode"
+                )
+            with col3:
+                if st.button("� Export Components"):
+                    export_data = {
+                        "components": st.session_state.canvas_components,
+                        "layout": layout_mode,
+                        "timestamp": time.time()
+                    }
+                    st.download_button(
+                        "💾 Download JSON",
+                        data=json.dumps(export_data, indent=2),
+                        file_name="kudwa_components.json",
+                        mime="application/json"
+                    )
+            with col4:
+                if st.button("🗑️ Clear All Components"):
+                    if st.session_state.get("confirm_clear", False):
+                        st.session_state.canvas_components = []
+                        st.session_state.confirm_clear = False
+                        st.rerun()
+                    else:
+                        st.session_state.confirm_clear = True
+                        st.warning("Click again to confirm clearing all components")
+
+            # Render components based on layout mode
+            layout_mode = st.session_state.get("layout_mode", "Single Column")
+
+            if layout_mode == "Single Column":
+                for i, component in enumerate(st.session_state.canvas_components):
+                    render_canvas_component(component, i)
+
+            elif layout_mode == "Two Columns":
+                # Split components into two columns
+                left_components = st.session_state.canvas_components[::2]  # Even indices
+                right_components = st.session_state.canvas_components[1::2]  # Odd indices
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    for i, component in enumerate(left_components):
+                        original_index = i * 2
+                        render_canvas_component(component, original_index)
+
+                with col2:
+                    for i, component in enumerate(right_components):
+                        original_index = i * 2 + 1
+                        render_canvas_component(component, original_index)
+
+            elif layout_mode == "Grid":
+                # Grid layout with 2x2 or 3x3 based on number of components
+                num_components = len(st.session_state.canvas_components)
+                if num_components <= 4:
+                    cols = st.columns(2)
+                    for i, component in enumerate(st.session_state.canvas_components):
+                        col_index = i % 2
+                        with cols[col_index]:
+                            render_canvas_component(component, i)
+                else:
+                    cols = st.columns(3)
+                    for i, component in enumerate(st.session_state.canvas_components):
+                        col_index = i % 3
+                        with cols[col_index]:
+                            render_canvas_component(component, i)
+        else:
+            st.info("No components yet. Create your first component using the prompt above!")
+
     # Simple footer
     st.markdown("---")
     col1, col2 = st.columns(2)

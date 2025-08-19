@@ -158,6 +158,9 @@ def get_ontology_graph_data():
 class ChatInput(BaseModel):
     message: str
 
+class ComponentGenerationInput(BaseModel):
+    prompt: str
+
 @app.post("/api/chat")
 async def chat(inp: ChatInput):
     """RAG-enabled chat about ontology data with real GenAI"""
@@ -310,4 +313,77 @@ async def reset_all_data():
         result = supabase_service.reset_all_data()
         return result
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/generate-component")
+async def generate_component(inp: ComponentGenerationInput):
+    """Generate a dynamic interface component based on user prompt"""
+
+    print(f"\n🎨 === COMPONENT GENERATION STARTED ===")
+    print(f"📝 User Prompt: '{inp.prompt}'")
+    print(f"⏰ Timestamp: {datetime.now().isoformat()}")
+
+    try:
+        print(f"\n🔍 STEP 1: Fetching ontology data for component generation...")
+
+        # Get current ontology data for context
+        entities = supabase_service.get_ontology_entities()
+        relations = supabase_service.get_ontology_relations()
+        instances = supabase_service.get_ontology_instances()
+
+        print(f"✅ Data fetched: {len(entities)} entities, {len(relations)} relations, {len(instances)} instances")
+
+        print(f"\n🔍 STEP 2: Calling GenAI Service for component generation...")
+
+        # Use GenAI service to generate component specification
+        result = genai_service.generate_component_specification(
+            user_prompt=inp.prompt,
+            entities=entities,
+            relations=relations,
+            instances=instances
+        )
+
+        print(f"✅ Component specification generated")
+        print(f"📝 Component type: {result.get('type', 'unknown')}")
+        print(f"🎨 === COMPONENT GENERATION COMPLETED ===\n")
+
+        return result
+
+    except Exception as e:
+        print(f"❌ Component Generation Error: {e}")
+        print(f"🎨 === COMPONENT GENERATION FAILED ===\n")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/refresh-component-data")
+async def refresh_component_data(component_spec: dict):
+    """Refresh data for a specific component based on its specification"""
+
+    print(f"\n🔄 === COMPONENT DATA REFRESH STARTED ===")
+    print(f"🎯 Component Type: {component_spec.get('type', 'unknown')}")
+    print(f"⏰ Timestamp: {datetime.now().isoformat()}")
+
+    try:
+        # Get fresh ontology data
+        entities = supabase_service.get_ontology_entities()
+        relations = supabase_service.get_ontology_relations()
+        instances = supabase_service.get_ontology_instances()
+
+        print(f"✅ Fresh data fetched: {len(entities)} entities, {len(relations)} relations, {len(instances)} instances")
+
+        # Regenerate component with fresh data
+        refreshed_component = genai_service.refresh_component_data(
+            component_spec=component_spec,
+            entities=entities,
+            relations=relations,
+            instances=instances
+        )
+
+        print(f"✅ Component data refreshed")
+        print(f"🔄 === COMPONENT DATA REFRESH COMPLETED ===\n")
+
+        return refreshed_component
+
+    except Exception as e:
+        print(f"❌ Component Refresh Error: {e}")
+        print(f"🔄 === COMPONENT DATA REFRESH FAILED ===\n")
         raise HTTPException(status_code=500, detail=str(e))
