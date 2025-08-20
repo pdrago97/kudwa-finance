@@ -18,7 +18,32 @@ services:
     volumes:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - kudwa-network
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=https://zafvnssmznpeurboybnd.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZnZuc3Ntem5wZXVyYm95Ym5kIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA1NTA5OSwiZXhwIjoyMDY0NjMxMDk5fQ.f5x48--VC61Oiis-XhfIXNGa1hVwlXbpVEo2ahNKPkY
+      - SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZnZuc3Ntem5wZXVyYm95Ym5kIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA1NTA5OSwiZXhwIjoyMDY0NjMxMDk5fQ.f5x48--VC61Oiis-XhfIXNGa1hVwlXbpVEo2ahNKPkY
+      - NEXT_PUBLIC_BACKEND_URL=http://backend:8000
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - kudwa-network
+
+  # Keep Streamlit for comparison/migration reference
   streamlit:
     build:
       context: ./streamlit_app
@@ -32,4 +57,10 @@ services:
     depends_on:
       - backend
     command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+    networks:
+      - kudwa-network
+
+networks:
+  kudwa-network:
+    driver: bridge
 
