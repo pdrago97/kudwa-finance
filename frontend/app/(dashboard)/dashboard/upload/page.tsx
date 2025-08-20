@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { 
-  Upload, 
-  FileText, 
-  Image, 
+import {
+  Upload,
+  FileText,
+  Image,
   File,
   CheckCircle,
   Clock,
@@ -16,6 +16,7 @@ import {
   X,
   Download
 } from 'lucide-react'
+import { ProposalsViewer } from '@/components/proposals-viewer'
 
 interface UploadedFile {
   id: string
@@ -24,32 +25,30 @@ interface UploadedFile {
   type: string
   status: 'uploading' | 'processing' | 'completed' | 'error'
   progress: number
+  result?: {
+    file_id?: string
+    proposals_generated?: number
+    message?: string
+    error?: string
+  }
 }
 
 export default function UploadPage() {
-  const [files, setFiles] = useState<UploadedFile[]>([
-    {
-      id: '1',
-      name: 'financial_report_q3.pdf',
-      size: '2.4 MB',
-      type: 'PDF',
-      status: 'completed',
-      progress: 100
-    },
-    {
-      id: '2',
-      name: 'transaction_data.csv',
-      size: '1.8 MB',
-      type: 'CSV',
-      status: 'processing',
-      progress: 65
-    }
-  ])
+  const [files, setFiles] = useState<UploadedFile[]>([])
+  const [refreshProposals, setRefreshProposals] = useState(0)
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const removeFile = (fileId: string) => {
+    setFiles(prev => prev.filter(f => f.id !== fileId))
+  }
+
+  const handleProposalsRefresh = () => {
+    setRefreshProposals(prev => prev + 1)
+  }
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = event.target.files
     if (uploadedFiles) {
-      Array.from(uploadedFiles).forEach((file) => {
+      Array.from(uploadedFiles).forEach(async (file) => {
         const newFile: UploadedFile = {
           id: Date.now().toString() + Math.random(),
           name: file.name,
@@ -58,26 +57,81 @@ export default function UploadPage() {
           status: 'uploading',
           progress: 0
         }
-        
+
         setFiles(prev => [...prev, newFile])
-        
-        // Simulate upload progress
-        const interval = setInterval(() => {
-          setFiles(prev => prev.map(f => {
-            if (f.id === newFile.id) {
-              const newProgress = Math.min(f.progress + Math.random() * 20, 100)
-              return {
-                ...f,
-                progress: newProgress,
-                status: newProgress === 100 ? 'completed' : 'uploading'
-              }
-            }
-            return f
-          }))
-        }, 500)
-        
-        setTimeout(() => clearInterval(interval), 5000)
+
+        try {
+          // Upload to backend
+          await uploadFileToBackend(file, newFile.id)
+        } catch (error) {
+          console.error('Upload failed:', error)
+          setFiles(prev => prev.map(f =>
+            f.id === newFile.id
+              ? { ...f, status: 'error', progress: 0 }
+              : f
+          ))
+        }
       })
+    }
+  }
+
+  const uploadFileToBackend = async (file: File, fileId: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('extract_ontology', 'true')
+    formData.append('auto_approve', 'false')
+
+    // Update progress to show upload starting
+    setFiles(prev => prev.map(f =>
+      f.id === fileId
+        ? { ...f, status: 'uploading', progress: 10 }
+        : f
+    ))
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`)
+      }
+
+      // Update progress to show processing
+      setFiles(prev => prev.map(f =>
+        f.id === fileId
+          ? { ...f, status: 'processing', progress: 50 }
+          : f
+      ))
+
+      const result = await response.json()
+
+      // Update to completed with result data
+      setFiles(prev => prev.map(f =>
+        f.id === fileId
+          ? { ...f, status: 'completed', progress: 100, result }
+          : f
+      ))
+
+      console.log('Upload successful:', result)
+
+      // Trigger proposals refresh
+      handleProposalsRefresh()
+
+    } catch (error) {
+      console.error('Upload error:', error)
+      setFiles(prev => prev.map(f =>
+        f.id === fileId
+          ? {
+              ...f,
+              status: 'error',
+              progress: 0,
+              result: { error: error instanceof Error ? error.message : 'Upload failed' }
+            }
+          : f
+      ))
+      throw error
     }
   }
 
@@ -191,7 +245,11 @@ export default function UploadPage() {
                         <p className="text-sm font-medium truncate">{file.name}</p>
                         <div className="flex items-center space-x-2">
                           {getStatusIcon(file.status)}
-                          <Button variant="ghost" size="sm">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeFile(file.id)}
+                          >
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
@@ -207,6 +265,22 @@ export default function UploadPage() {
                       {file.status === 'uploading' || file.status === 'processing' ? (
                         <Progress value={file.progress} className="mt-2" />
                       ) : null}
+
+                      {/* Show result details */}
+                      {file.result && (
+                        <div className="mt-2 text-xs">
+                          {file.status === 'completed' && file.result.proposals_generated !== undefined && (
+                            <div className="text-green-600">
+                              ✅ Generated {file.result.proposals_generated} ontology proposals
+                            </div>
+                          )}
+                          {file.status === 'error' && file.result.error && (
+                            <div className="text-red-600">
+                              ❌ {file.result.error}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -218,6 +292,9 @@ export default function UploadPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Proposals Viewer */}
+          <ProposalsViewer key={refreshProposals} onRefresh={handleProposalsRefresh} />
         </div>
 
         {/* Sidebar */}

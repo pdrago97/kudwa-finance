@@ -59,10 +59,41 @@ class SupabaseService:
         }).execute()
         return result.data[0] if result.data else None
     
+    def get_proposals(self) -> list:
+        """Get all proposals"""
+        result = self.client.table("kudwa_proposals").select("*").order("created_at", desc=True).execute()
+        return result.data if result.data else []
+
     def get_pending_proposals(self) -> list:
         """Get all pending proposals"""
         result = self.client.table("kudwa_proposals").select("*").eq("status", "pending").execute()
         return result.data if result.data else []
+
+    def get_files(self) -> list:
+        """Get all uploaded files"""
+        result = self.client.table("kudwa_files").select("*").order("created_at", desc=True).execute()
+        return result.data if result.data else []
+
+    def delete_file(self, file_id: str) -> bool:
+        """Delete a file and its related data"""
+        try:
+            # Delete related proposals first
+            self.client.table("kudwa_proposals").delete().eq("payload->>source_file_id", file_id).execute()
+
+            # Delete related vectors and chunks
+            chunks_result = self.client.table("kudwa_chunks").select("id").eq("file_id", file_id).execute()
+            if chunks_result.data:
+                chunk_ids = [chunk["id"] for chunk in chunks_result.data]
+                for chunk_id in chunk_ids:
+                    self.client.table("kudwa_vectors").delete().eq("chunk_id", chunk_id).execute()
+                self.client.table("kudwa_chunks").delete().eq("file_id", file_id).execute()
+
+            # Delete the file record
+            result = self.client.table("kudwa_files").delete().eq("id", file_id).execute()
+            return len(result.data) > 0 if result.data else False
+        except Exception as e:
+            print(f"Error deleting file {file_id}: {e}")
+            return False
     
     def get_proposal_by_id(self, proposal_id: str) -> dict:
         """Get a specific proposal by ID"""
@@ -72,6 +103,15 @@ class SupabaseService:
         except Exception as e:
             print(f"Error fetching proposal: {e}")
             return None
+
+    def update_proposal_status(self, proposal_id: str, status: str, reviewed_by: str = "user") -> dict:
+        """Update proposal status"""
+        result = self.client.table("kudwa_proposals").update({
+            "status": status,
+            "reviewed_by": reviewed_by,
+            "reviewed_at": "now()"
+        }).eq("id", proposal_id).execute()
+        return result.data[0] if result.data else None
 
     def approve_proposal(self, proposal_id: str, action: str, reviewed_by: str = "user") -> dict:
         """Approve or reject a proposal"""
@@ -92,6 +132,24 @@ class SupabaseService:
         except Exception as e:
             print(f"Error finding entity {entity_name}: {e}")
             return None
+
+    def merge_proposal_to_ontology(self, proposal: dict) -> dict:
+        """Merge a proposal into the ontology and update its status"""
+        try:
+            # First merge the proposal
+            self.merge_approved_proposal(proposal)
+
+            # Update proposal status to approved
+            self.update_proposal_status(proposal["id"], "approved")
+
+            return {
+                "success": True,
+                "entity_name": proposal.get("payload", {}).get("name", "unknown"),
+                "type": proposal.get("type")
+            }
+        except Exception as e:
+            print(f"Error merging proposal to ontology: {e}")
+            raise e
 
     def merge_approved_proposal(self, proposal: dict):
         """Merge an approved proposal into the ontology tables"""

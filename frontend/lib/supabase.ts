@@ -3,7 +3,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 // Use hardcoded values that we know work
 const supabaseUrl = 'https://zafvnssmznpeurboybnd.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZnZuc3Ntem5wZXVyYm95Ym5kIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA1NTA5OSwiZXhwIjoyMDY0NjMxMDk5fQ.f5x48--VC61Oiis-XhfIXNGa1hVwlXbpVEo2ahNKPkY'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZnZuc3Ntem5wZXVyYm95Ym5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkwNTUwOTksImV4cCI6MjA2NDYzMTA5OX0.bcUVRQqUmBxlNx-VJjybpuX1sUuO_m2IfMe6NSIeRAE'
 
 console.log('Using hardcoded Supabase configuration')
 console.log('Supabase URL:', supabaseUrl)
@@ -356,6 +356,83 @@ export const ontologyService = {
     } catch (error) {
       console.error('Error fetching stats:', error)
       return { entities: 4, relations: 3 }
+    }
+  }
+}
+
+// File service for documents page
+export interface FileRecord {
+  id: string
+  filename: string
+  mime: string
+  size_bytes: number
+  sha256: string
+  status: string
+  created_at: string
+  user_id: string
+}
+
+export const fileService = {
+  // Get all files
+  async getFiles(): Promise<FileRecord[]> {
+    try {
+      const { data, error } = await supabase
+        .from('kudwa_files')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      return data || []
+    } catch (error) {
+      console.error('Error fetching files:', error)
+      return []
+    }
+  },
+
+  // Format file size for display
+  formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  },
+
+  // Get file type from mime type
+  getFileType(mime: string): string {
+    if (mime.includes('json')) return 'JSON'
+    if (mime.includes('pdf')) return 'PDF'
+    if (mime.includes('csv')) return 'CSV'
+    if (mime.includes('excel') || mime.includes('spreadsheet')) return 'Excel'
+    if (mime.includes('text')) return 'Text'
+    if (mime.includes('image')) return 'Image'
+    return 'File'
+  },
+
+  // Format date for display
+  formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  },
+
+  // Delete a file
+  async deleteFile(fileId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/files/${fileId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete file')
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error deleting file:', error)
+      return false
     }
   }
 }

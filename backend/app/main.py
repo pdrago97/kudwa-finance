@@ -39,6 +39,7 @@ class Proposal(BaseModel):
 
 @app.post("/api/upload-json")
 async def upload_json(file: UploadFile = File(...)):
+    """Legacy JSON upload endpoint - kept for compatibility"""
     if not file.filename.endswith(".json"):
         raise HTTPException(status_code=400, detail="Only .json supported in MVP phase")
 
@@ -49,13 +50,20 @@ async def upload_json(file: UploadFile = File(...)):
         json_data = json.loads(content_str)
 
         # Create file hash for deduplication
-        file_hash = hashlib.md5(content_str.encode()).hexdigest()
-        
+        file_hash = hashlib.sha256(content.encode()).hexdigest()
+
         # Store file metadata
-        file_id = supabase_service.insert_file(file.filename, file_hash, content_str)
-        
-        if not file_id:
+        file_record = supabase_service.insert_file(
+            filename=file.filename,
+            mime="application/json",
+            size_bytes=len(content),
+            sha256=file_hash
+        )
+
+        if not file_record:
             return {"message": "File already processed (duplicate)", "file_id": None}
+
+        file_id = file_record["id"]
 
         # Chunk the JSON content for embeddings
         chunks = embedding_service.chunk_text(content_str)
@@ -70,8 +78,9 @@ async def upload_json(file: UploadFile = File(...)):
         #         print(f"Embedding generation failed: {e}")
 
         # Extract ontology proposals
-        proposals = ontology_extractor.extract_ontology_proposals(json_data, file_id)
-        
+        ontology_data = ontology_extractor.extract_ontology_from_json(json_data, file.filename)
+        proposals = ontology_extractor.create_proposals(ontology_data, file_id)
+
         # Store proposals in database
         stored_proposals = []
         for proposal in proposals:
@@ -95,12 +104,202 @@ async def upload_json(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Enhanced upload endpoint supporting multiple file types with langextract integration"""
+
+    print(f"\n📁 === FILE UPLOAD STARTED ===")
+    print(f"📄 File: {file.filename}")
+    print(f"📏 Size: {file.size} bytes")
+    print(f"🏷️  Content Type: {file.content_type}")
+    print(f"⏰ Timestamp: {datetime.now().isoformat()}")
+
+    try:
+        # Read file content
+        content = await file.read()
+
+        # Try to decode as UTF-8 for text-based files (JSON, CSV, TXT, etc.)
+        try:
+            content_str = content.decode('utf-8')
+        except UnicodeDecodeError:
+            # For binary files, we'll handle them differently later
+            content_str = str(content)
+
+        # Create file hash for deduplication
+        file_hash = hashlib.sha256(content).hexdigest()
+
+        print(f"🔍 File hash: {file_hash[:16]}...")
+
+        # Store file metadata in Supabase
+        file_record = supabase_service.insert_file(
+            filename=file.filename,
+            mime=file.content_type or "application/octet-stream",
+            size_bytes=len(content),
+            sha256=file_hash
+        )
+
+        if not file_record:
+            return {
+                "message": "File already processed (duplicate)",
+                "file_id": None,
+                "proposals_generated": 0
+            }
+
+        file_id = file_record["id"]
+        print(f"✅ File stored with ID: {file_id}")
+
+        # Process based on file type
+        extracted_data = None
+        file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+
+        print(f"🔍 Processing file type: {file_extension}")
+
+        if file_extension == 'json':
+            # Parse JSON directly
+            try:
+                extracted_data = json.loads(content_str)
+                print(f"✅ JSON parsed successfully")
+            except json.JSONDecodeError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
+
+        elif file_extension in ['pdf', 'csv', 'xlsx', 'xls', 'txt', 'docx']:
+            # Use langextract for document processing
+            print(f"🔍 Using langextract for {file_extension} processing...")
+            try:
+                # For now, simulate langextract processing
+                # In production, you would integrate with actual langextract
+                extracted_data = {
+                    "document_type": file_extension,
+                    "filename": file.filename,
+                    "content_preview": content_str[:500] if len(content_str) > 500 else content_str,
+                    "extracted_entities": [
+                        {"type": "Document", "name": file.filename.split('.')[0]},
+                        {"type": "FileType", "name": file_extension.upper()}
+                    ],
+                    "metadata": {
+                        "size": len(content),
+                        "processed_at": datetime.now().isoformat()
+                    }
+                }
+                print(f"✅ Document processed with langextract simulation")
+            except Exception as e:
+                print(f"❌ Langextract processing failed: {e}")
+                extracted_data = {
+                    "error": f"Document processing failed: {str(e)}",
+                    "filename": file.filename
+                }
+        else:
+            # Unsupported file type
+            extracted_data = {
+                "error": f"Unsupported file type: {file_extension}",
+                "filename": file.filename,
+                "supported_types": ["json", "pdf", "csv", "xlsx", "xls", "txt", "docx"]
+            }
+
+        # Extract ontology proposals using the ontology extractor
+        print(f"🧠 Extracting ontology proposals...")
+        if file_extension == 'json':
+            # For JSON files, use the JSON-specific extractor
+            ontology_data = ontology_extractor.extract_ontology_from_json(extracted_data, file.filename)
+            proposals = ontology_extractor.create_proposals(ontology_data, file_id)
+        else:
+            # For other file types, create basic proposals from extracted data
+            proposals = []
+            if isinstance(extracted_data, dict) and "extracted_entities" in extracted_data:
+                for entity in extracted_data["extracted_entities"]:
+                    proposals.append({
+                        "type": "entity",
+                        "payload": {
+                            "name": entity.get("name", "Unknown"),
+                            "properties": {"type": entity.get("type", "Generic")},
+                            "source_file_id": file_id
+                        }
+                    })
+
+        # Store proposals in database
+        stored_proposals = []
+        for proposal in proposals:
+            stored_proposal = supabase_service.insert_proposal(
+                proposal_type=proposal["type"],
+                payload=proposal["payload"],
+                created_by="system"
+            )
+            if stored_proposal:
+                stored_proposals.append(stored_proposal)
+
+        print(f"✅ Generated {len(stored_proposals)} ontology proposals")
+
+        # Update file status to completed
+        supabase_service.update_file_status(file_id, "completed")
+
+        print(f"🎯 === FILE UPLOAD COMPLETED ===\n")
+
+        return {
+            "message": f"Successfully processed {file.filename}",
+            "file_id": file_id,
+            "file_type": file_extension,
+            "proposals_generated": len(stored_proposals),
+            "proposals": stored_proposals[:5],  # Return first 5 proposals for preview
+            "total_proposals": len(stored_proposals)
+        }
+
+    except Exception as e:
+        print(f"\n❌ === FILE UPLOAD FAILED ===")
+        print(f"💥 Error: {e}")
+        print(f"🔍 Error type: {type(e).__name__}")
+        import traceback
+        print(f"📍 Traceback: {traceback.format_exc()}")
+        print(f"❌ === END ERROR LOG ===\n")
+
+        # Update file status to error if we have a file_id
+        try:
+            if 'file_id' in locals():
+                supabase_service.update_file_status(file_id, "error")
+        except:
+            pass
+
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+
 @app.get("/api/proposals")
 def get_proposals():
     """Get all pending proposals"""
     try:
         proposals = supabase_service.get_pending_proposals()
         return {"proposals": proposals}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/files")
+def get_files():
+    """Get all uploaded files"""
+    try:
+        files = supabase_service.get_files()
+        return {"files": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/files/{file_id}")
+def delete_file(file_id: str):
+    """Delete a file and its related data"""
+    try:
+        success = supabase_service.delete_file(file_id)
+        if success:
+            return {"message": "File deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/proposals")
+def get_proposals():
+    """Get all pending proposals"""
+    try:
+        proposals = supabase_service.get_proposals()
+        return {
+            "proposals": proposals,
+            "total": len(proposals)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -115,10 +314,26 @@ def approve_proposal(proposal_id: str):
 
         # Merge the proposal into the ontology
         result = supabase_service.merge_proposal_to_ontology(proposal)
-        
+
         return {
             "message": f"Successfully merged {proposal['type']} for {result.get('entity_name', 'entity')}",
             "result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/proposals/{proposal_id}/reject")
+def reject_proposal(proposal_id: str):
+    """Reject a proposal"""
+    try:
+        # Update proposal status to rejected
+        result = supabase_service.update_proposal_status(proposal_id, "rejected")
+        if not result:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+
+        return {
+            "message": "Proposal rejected successfully",
+            "proposal_id": proposal_id
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

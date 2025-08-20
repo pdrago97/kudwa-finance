@@ -1,0 +1,82 @@
+{
+  "financial_report": {
+    "id": "Q4_2024_REPORT",
+    "title": "Q4 2024 Financial Report",
+    "period": {
+      "start_date": "2024-10-01",
+      "end_date": "2024-12-31",
+      "quarter": "Q4",
+      "year": 2024
+    },
+    "accounts": [
+      {
+        "account_id": "REV001",
+        "name": "Revenue Account",
+        "type": "Revenue",
+        "balance": 125000,
+        "currency": "USD",
+        "transactions": [
+          {
+            "transaction_id": "TXN001",
+            "date": "2024-10-15",
+            "amount": 25000,
+            "description": "Product Sales",
+            "category": "Sales Revenue"
+          },
+          {
+            "transaction_id": "TXN002", 
+            "date": "2024-11-20",
+            "amount": 35000,
+            "description": "Service Revenue",
+            "category": "Service Revenue"
+          }
+        ]
+      },
+      {
+        "account_id": "EXP001",
+        "name": "Operating Expenses",
+        "type": "Expense",
+        "balance": 45000,
+        "currency": "USD",
+        "transactions": [
+          {
+            "transaction_id": "TXN003",
+            "date": "2024-10-05",
+            "amount": 15000,
+            "description": "Office Rent",
+            "category": "Rent"
+          },
+          {
+            "transaction_id": "TXN004",
+            "date": "2024-11-01",
+            "amount": 12000,
+            "description": "Employee Salaries",
+            "category": "Payroll"
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "total_revenue": 125000,
+      "total_expenses": 45000,
+      "net_income": 80000,
+      "profit_margin": 0.64
+    },
+    "observations": [
+      {
+        "id": "OBS001",
+        "type": "Revenue Growth",
+        "description": "Revenue increased by 15% compared to Q3 2024",
+        "value": 0.15,
+        "significance": "positive"
+      },
+      {
+        "id": "OBS002", 
+        "type": "Cost Control",
+        "description": "Operating expenses reduced by 8% through efficiency improvements",
+        "value": -0.08,
+        "significance": "positive"
+      }
+    ]
+  }
+}
