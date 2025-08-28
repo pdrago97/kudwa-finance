@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = None
     ANTHROPIC_MODEL: str = "claude-3-sonnet-20240229"
 
+    # Agno Framework Configuration
+    AGNO_CLAUDE_MODEL: str = "claude-sonnet-4-20250514"
+    AGNO_OPENAI_MODEL: str = "gpt-4o"
+    AGNO_REASONING_ENABLED: bool = True
+    AGNO_MULTI_MODAL: bool = True
+
     # Google Cloud (for LangExtract)
     GOOGLE_CLOUD_PROJECT: Optional[str] = None
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None

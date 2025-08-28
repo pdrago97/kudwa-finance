@@ -1,0 +1,51 @@
+{
+  "Header": {
+    "ReportName": "Profit and Loss Statement",
+    "Company": "Acme Corporation",
+    "Currency": "USD",
+    "StartPeriod": "2024-01-01",
+    "EndPeriod": "2024-12-31"
+  },
+  "Rows": [
+    {
+      "group": "Income",
+      "Rows": [
+        {
+          "ColData": [
+            {"value": "Sales Revenue"},
+            {"value": "150000.00"}
+          ]
+        },
+        {
+          "ColData": [
+            {"value": "Service Revenue"},
+            {"value": "75000.00"}
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Expenses",
+      "Rows": [
+        {
+          "ColData": [
+            {"value": "Cost of Goods Sold"},
+            {"value": "60000.00"}
+          ]
+        },
+        {
+          "ColData": [
+            {"value": "Operating Expenses"},
+            {"value": "45000.00"}
+          ]
+        },
+        {
+          "ColData": [
+            {"value": "Marketing Expenses"},
+            {"value": "15000.00"}
+          ]
+        }
+      ]
+    }
+  ]
+}

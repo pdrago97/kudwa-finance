@@ -111,11 +111,34 @@ class LangExtractOntologyProcessor:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 file_content = f.read()
 
+            # Create example data for LangExtract
+            example_data = ExampleData(
+                text="Sales Revenue: $150,000. Operating Expenses: $45,000. Acme Corporation profit and loss statement.",
+                extractions=[
+                    Extraction(
+                        extraction_text="Sales Revenue",
+                        extraction_class="FinancialAccount",
+                        description="Revenue account for sales income"
+                    ),
+                    Extraction(
+                        extraction_text="Operating Expenses",
+                        extraction_class="ExpenseAccount",
+                        description="Account for operational costs"
+                    ),
+                    Extraction(
+                        extraction_text="Acme Corporation",
+                        extraction_class="Organization",
+                        description="Company entity"
+                    )
+                ]
+            )
+
             # Use real LangExtract to process the document
             print(f"🧠 Calling LangExtract API...")
             annotated_doc = extract(
                 text_or_documents=file_content,
                 prompt_description=self.extraction_prompt,
+                examples=[example_data],
                 api_key=self.api_key,
                 model_id="gpt-4o-mini",  # or "gemini-1.5-flash"
                 temperature=0.1,
@@ -231,7 +254,7 @@ class LangExtractOntologyProcessor:
                 document_id=document_id,
                 source_filename=filename,
                 extraction_timestamp=start_time,
-                langextract_version=langextract.__version__,
+                langextract_version=getattr(langextract, '__version__', '1.0.0'),
                 classes=classes,
                 relations=relations,
                 raw_langextract_output=raw_result,
@@ -254,7 +277,7 @@ class LangExtractOntologyProcessor:
                 document_id=document_id,
                 source_filename=filename,
                 extraction_timestamp=start_time,
-                langextract_version=langextract.__version__,
+                langextract_version=getattr(langextract, '__version__', '1.0.0'),
                 classes=[],
                 relations=[],
                 raw_langextract_output={"error": str(e)},

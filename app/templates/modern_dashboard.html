@@ -47,6 +47,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="#upload" class="nav-link" data-section="upload">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>File Upload</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="#documents" class="nav-link" data-section="documents">
                             <i class="fas fa-file-alt"></i>
                             <span>Documents</span>
@@ -156,7 +162,42 @@
                         <div class="message">
                             <div class="message-avatar">AI</div>
                             <div class="message-content">
-                                Hello! I'm your AI financial assistant. You can ask me questions about your financial data or upload documents for analysis. How can I help you today?
+                                <div class="welcome-message">
+                                    <h4>🧠 Welcome to Kudwa Financial AI with Agno Integration!</h4>
+                                    <p>I'm your enhanced AI assistant powered by both <strong>Agno reasoning</strong> and <strong>CrewAI</strong>. I can help you with:</p>
+
+                                    <div class="capabilities-grid">
+                                        <div class="capability-item">
+                                            <strong>📊 Financial Analysis</strong><br>
+                                            Deep analysis of your financial data with step-by-step reasoning
+                                        </div>
+                                        <div class="capability-item">
+                                            <strong>📄 Document Processing</strong><br>
+                                            Upload documents for intelligent extraction and analysis
+                                        </div>
+                                        <div class="capability-item">
+                                            <strong>🔍 Ontology Management</strong><br>
+                                            Manage and extend your financial ontology
+                                        </div>
+                                        <div class="capability-item">
+                                            <strong>🎨 Interface Creation</strong><br>
+                                            Generate custom interfaces and visualizations
+                                        </div>
+                                    </div>
+
+                                    <div class="agno-commands">
+                                        <h5>🚀 Quick Commands:</h5>
+                                        <div class="command-list">
+                                            <code>/reasoning on</code> - Enable detailed step-by-step analysis<br>
+                                            <code>/demo</code> - See Agno reasoning in action<br>
+                                            <code>/interface</code> - Create custom interfaces<br>
+                                            <code>/agno-status</code> - Check system status<br>
+                                            <code>/upload</code> - Upload documents
+                                        </div>
+                                    </div>
+
+                                    <p><strong>Try asking:</strong> "Analyze my revenue trends with reasoning" or "Create a dashboard for expenses"</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -208,6 +249,167 @@
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- File Upload Section -->
+            <section id="upload-section" class="content-section hidden">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Document Upload & Processing</h3>
+                        <div class="flex items-center gap-4">
+                            <button class="btn btn-secondary btn-sm" id="clear-upload-history-btn">
+                                <i class="fas fa-trash"></i>
+                                Clear History
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <div class="upload-area">
+                            <!-- Pipeline Configuration -->
+                            <div class="pipeline-config-section">
+                                <h4>🔧 Processing Pipeline Configuration</h4>
+                                <div class="pipeline-options">
+                                    <div class="pipeline-option">
+                                        <input type="radio" id="langextract-pipeline" name="pipeline" value="langextract" checked>
+                                        <label for="langextract-pipeline">
+                                            <div class="pipeline-card">
+                                                <div class="pipeline-icon">🧠</div>
+                                                <div class="pipeline-info">
+                                                    <h5>LangExtract</h5>
+                                                    <p>Google's advanced entity extraction and ontology mapping</p>
+                                                    <div class="pipeline-features">
+                                                        <span class="feature-tag">Entity Recognition</span>
+                                                        <span class="feature-tag">Ontology Mapping</span>
+                                                        <span class="feature-tag">Confidence Scoring</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <div class="pipeline-option">
+                                        <input type="radio" id="rag-anything-pipeline" name="pipeline" value="rag-anything">
+                                        <label for="rag-anything-pipeline">
+                                            <div class="pipeline-card">
+                                                <div class="pipeline-icon">🔍</div>
+                                                <div class="pipeline-info">
+                                                    <h5>RAG-Anything</h5>
+                                                    <p>Advanced RAG system for any data type and pattern</p>
+                                                    <div class="pipeline-features">
+                                                        <span class="feature-tag">Multi-Modal RAG</span>
+                                                        <span class="feature-tag">Pattern Recognition</span>
+                                                        <span class="feature-tag">Context Retrieval</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <div class="pipeline-option">
+                                        <input type="radio" id="agno-pipeline" name="pipeline" value="agno">
+                                        <label for="agno-pipeline">
+                                            <div class="pipeline-card">
+                                                <div class="pipeline-icon">⚡</div>
+                                                <div class="pipeline-info">
+                                                    <h5>Agno AGI</h5>
+                                                    <p>Reasoning-based document analysis with step-by-step insights</p>
+                                                    <div class="pipeline-features">
+                                                        <span class="feature-tag">Reasoning Engine</span>
+                                                        <span class="feature-tag">Multi-Step Analysis</span>
+                                                        <span class="feature-tag">Insight Generation</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <div class="pipeline-option">
+                                        <input type="radio" id="hybrid-pipeline" name="pipeline" value="hybrid">
+                                        <label for="hybrid-pipeline">
+                                            <div class="pipeline-card">
+                                                <div class="pipeline-icon">🚀</div>
+                                                <div class="pipeline-info">
+                                                    <h5>Hybrid Pipeline</h5>
+                                                    <p>Combines multiple tools for maximum accuracy and insights</p>
+                                                    <div class="pipeline-features">
+                                                        <span class="feature-tag">Multi-Tool</span>
+                                                        <span class="feature-tag">Cross-Validation</span>
+                                                        <span class="feature-tag">Best Results</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="upload-zone" id="upload-zone">
+                                <div class="upload-zone-content">
+                                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                    <h4>Drop files here or click to browse</h4>
+                                    <p>Supports JSON, CSV, PDF, Excel, and text files</p>
+                                    <p class="text-muted">Files will be processed with selected pipeline</p>
+                                    <input type="file" id="dedicated-file-input" style="display: none;"
+                                           accept=".json,.csv,.pdf,.xlsx,.txt,.xls" multiple>
+                                    <button class="btn btn-primary" onclick="document.getElementById('dedicated-file-input').click()">
+                                        <i class="fas fa-folder-open"></i>
+                                        Choose Files
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="upload-progress-section" class="upload-progress-section hidden">
+                                <div class="progress-container">
+                                    <div class="progress">
+                                        <div class="progress-bar" id="upload-progress-bar" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                    <p class="upload-status" id="upload-status">Processing...</p>
+                                </div>
+                            </div>
+
+                            <!-- Interactive Processing Chat -->
+                            <div id="interactive-processing-section" class="interactive-processing-section hidden">
+                                <div class="processing-chat-container">
+                                    <div class="processing-chat-header">
+                                        <h4>🤖 Interactive Processing Assistant</h4>
+                                        <div class="processing-status">
+                                            <span id="processing-stage">Initializing...</span>
+                                            <div class="processing-progress">
+                                                <div class="progress-bar" id="processing-progress-bar"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="processing-chat-messages" id="processing-chat-messages">
+                                        <!-- Messages will be added here -->
+                                    </div>
+
+                                    <div class="processing-chat-input">
+                                        <div class="chat-input-container">
+                                            <input type="text" id="processing-chat-input" placeholder="Guide the processing, ask questions, or provide feedback..." disabled>
+                                            <button id="processing-chat-send" class="btn btn-primary" disabled>
+                                                <i class="fas fa-paper-plane"></i>
+                                            </button>
+                                        </div>
+                                        <div class="quick-actions">
+                                            <button class="quick-action-btn" data-action="approve">✅ Approve Step</button>
+                                            <button class="quick-action-btn" data-action="modify">🔧 Suggest Modification</button>
+                                            <button class="quick-action-btn" data-action="question">❓ Ask Question</button>
+                                            <button class="quick-action-btn" data-action="skip">⏭️ Skip Step</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="upload-results-section" class="upload-results-section">
+                                <h5>Recent Uploads</h5>
+                                <div id="upload-results-list" class="upload-results-list">
+                                    <p class="text-muted">No files uploaded yet</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -308,7 +510,12 @@
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Pending Approvals</h3>
-                        <span class="badge" id="pending-count">0 pending</span>
+                        <div class="card-header-actions">
+                            <button id="bulk-approve-btn" class="btn btn-success" style="display: none;" onclick="bulkApproveAll()">
+                                <i class="fas fa-check-double"></i> Approve All
+                            </button>
+                            <span class="badge" id="pending-count">0 pending</span>
+                        </div>
                     </div>
                     <div class="card-content">
                         <div id="approval-items">
@@ -451,5 +658,6 @@
     </div>
 
     <script src="{{ url_for('static', path='/js/modern-dashboard.js') }}"></script>
+    <script src="{{ url_for('static', path='/js/agno-chat.js') }}"></script>
 </body>
 </html>

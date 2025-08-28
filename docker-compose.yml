@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # Main Kudwa Application
+  kudwa-app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Database Configuration
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      
+      # AI API Keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      
+      # LangExtract Configuration
+      - LANGEXTRACT_API_KEY=${OPENAI_API_KEY}
+      
+      # Application Settings
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Local PostgreSQL (if not using Supabase)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=kudwa
+      - POSTGRES_USER=kudwa
+      - POSTGRES_PASSWORD=kudwa_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    profiles:
+      - local-db
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    profiles:
+      - cache
+
+volumes:
+  postgres_data:
