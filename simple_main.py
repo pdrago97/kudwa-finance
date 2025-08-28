@@ -2126,6 +2126,144 @@ async def get_available_pipelines():
         ]
     }
 
+# Interactive Processing Endpoints
+@app.post("/api/v1/processing/feedback")
+async def submit_processing_feedback(request: Request):
+    """Handle user feedback during interactive processing"""
+    try:
+        body = await request.json()
+        step_index = body.get('step_index', 0)
+        feedback = body.get('feedback', '')
+        action = body.get('action', 'continue')
+        pipeline_type = body.get('pipeline_type', 'langextract')
+        filename = body.get('filename', '')
+
+        # Process the feedback (in real implementation, this would adjust the processing)
+        response_messages = {
+            'approve': f"✅ Step {step_index + 1} approved. Continuing to next step.",
+            'modify': f"🔧 Modifications noted for step {step_index + 1}: {feedback}",
+            'reject': f"❌ Step {step_index + 1} rejected. Will retry with adjustments.",
+            'continue': f"📝 Feedback received for step {step_index + 1}: {feedback}"
+        }
+
+        return {
+            "success": True,
+            "message": response_messages.get(action, "Feedback received"),
+            "requires_reprocessing": action in ['modify', 'reject'],
+            "next_action": "continue" if action == 'approve' else "wait_for_input"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Feedback processing failed: {str(e)}")
+
+@app.post("/api/v1/documents/process-langextract-interactive")
+async def process_document_langextract_interactive(file: UploadFile = File(...), user_id: str = "demo_user", pipeline_type: str = "langextract", interactive_mode: str = "true"):
+    """Process document using LangExtract with interactive chat support"""
+    try:
+        content = await file.read()
+
+        # In real implementation, this would start a background task
+        # and communicate via WebSocket or Server-Sent Events
+
+        return {
+            "success": True,
+            "document_id": str(uuid.uuid4()),
+            "pipeline_used": "langextract",
+            "filename": file.filename,
+            "interactive_session_id": str(uuid.uuid4()),
+            "processing_results": {
+                "pipeline": "langextract",
+                "interactive_mode": True,
+                "status": "started",
+                "message": "Interactive processing session started. Check chat for real-time updates."
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Interactive LangExtract processing failed: {str(e)}")
+
+@app.post("/api/v1/documents/process-rag-anything-interactive")
+async def process_document_rag_anything_interactive(file: UploadFile = File(...), user_id: str = "demo_user", pipeline_type: str = "rag-anything", interactive_mode: str = "true"):
+    """Process document using RAG-Anything with interactive chat support"""
+    try:
+        content = await file.read()
+
+        return {
+            "success": True,
+            "document_id": str(uuid.uuid4()),
+            "pipeline_used": "rag-anything",
+            "filename": file.filename,
+            "interactive_session_id": str(uuid.uuid4()),
+            "processing_results": {
+                "pipeline": "rag-anything",
+                "interactive_mode": True,
+                "status": "started",
+                "message": "Interactive RAG-Anything processing session started."
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Interactive RAG-Anything processing failed: {str(e)}")
+
+@app.post("/api/v1/documents/process-agno-interactive")
+async def process_document_agno_interactive(file: UploadFile = File(...), user_id: str = "demo_user", pipeline_type: str = "agno", interactive_mode: str = "true"):
+    """Process document using Agno with interactive chat support"""
+    try:
+        content = await file.read()
+
+        return {
+            "success": True,
+            "document_id": str(uuid.uuid4()),
+            "pipeline_used": "agno",
+            "filename": file.filename,
+            "interactive_session_id": str(uuid.uuid4()),
+            "processing_results": {
+                "pipeline": "agno",
+                "interactive_mode": True,
+                "status": "started",
+                "message": "Interactive Agno reasoning session started."
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Interactive Agno processing failed: {str(e)}")
+
+@app.post("/api/v1/documents/process-hybrid-interactive")
+async def process_document_hybrid_interactive(file: UploadFile = File(...), user_id: str = "demo_user", pipeline_type: str = "hybrid", interactive_mode: str = "true"):
+    """Process document using Hybrid pipeline with interactive chat support"""
+    try:
+        content = await file.read()
+
+        return {
+            "success": True,
+            "document_id": str(uuid.uuid4()),
+            "pipeline_used": "hybrid",
+            "filename": file.filename,
+            "interactive_session_id": str(uuid.uuid4()),
+            "processing_results": {
+                "pipeline": "hybrid",
+                "interactive_mode": True,
+                "status": "started",
+                "message": "Interactive Hybrid processing session started with all tools."
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Interactive Hybrid processing failed: {str(e)}")
+
+@app.get("/api/v1/processing/session/{session_id}/status")
+async def get_processing_session_status(session_id: str):
+    """Get status of an interactive processing session"""
+    # In real implementation, this would check the actual session status
+    return {
+        "session_id": session_id,
+        "status": "active",
+        "current_step": 2,
+        "total_steps": 5,
+        "awaiting_input": True,
+        "last_update": datetime.now().isoformat()
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
